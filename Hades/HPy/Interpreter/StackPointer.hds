@@ -3,7 +3,24 @@ import HPy.Stubs as Stubs;
 
 type StackPointer = **mut PyObject.t;
 
-@extern(HPy_Interpreter_TOP)
+@extern(HPy_Interpreter_StackPointer_top)
 def top(stack: StackPointer): *mut PyObject.t {
-    return *Stubs.pointer_offset(stack, -1);
+    return value_at(stack, -1);
+}
+
+@extern(HPy_Interpreter_StackPointer_second)
+def second(stack: StackPointer): *mut PyObject.t {
+    return value_at(stack, -2);
+}
+
+@extern(HPy_Interpreter_StackPointer_pop)
+def pop(top_ptr: *mut StackPointer): *mut PyObject.t {
+    val stack = *top_ptr;
+    val result = value_at(stack, -1);
+    *top_ptr = Stubs.pointer_offset(stack, -1);
+    return result;
+}
+
+def value_at(stack: StackPointer, offset: Size): *mut PyObject.t {
+    return *Stubs.pointer_offset(stack, offset);
 }

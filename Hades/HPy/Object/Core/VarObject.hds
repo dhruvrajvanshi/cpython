@@ -1,7 +1,8 @@
 import HPy.Core.SSize as SSize;
+import HPy.Object as PyObject;
 
 struct PyVarObject {
-    val base: PyObject;
+    val base: PyObject.t;
     // Number of items in variable part
     val size: SSize.t;
 }

@@ -1,11 +1,23 @@
 import HPy.Core.SSize as SSize;
+import HPy.Object.Core.TypeObject as PyTypeObject;
 
 type t = PyObject;
 struct PyObject {
     val refcnt: SSize.t;
+    val ob_type: *PyTypeObject.t;
 }
 
 @extern(_Py_INCREF)
 def incref(obj: *mut t): Void {
     *obj.refcnt = *obj.refcnt + 1;
 }
+
+type BinaryFunc = *(*PyObject, *PyObject) -> *PyObject;
+type Destructor = *(*mut PyObject) -> Void;
+
+@extern(_Py_TYPE)
+def type_of(self: *PyObject): *PyTypeObject.t {
+    return *self.ob_type;
+}
+
+

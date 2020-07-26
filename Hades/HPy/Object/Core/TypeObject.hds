@@ -4,7 +4,7 @@ import HPy.Object.Core.VarObject as PyVarObject;
 type PyTypeObject = t;
 struct t {
     val base: PyVarObject.t;
-    val name *Byte;
+    val name:  *Byte;
     val basicsize: SSize.t;
     val itemsize: SSize.t; // For allocation
 

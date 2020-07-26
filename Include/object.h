@@ -134,9 +134,8 @@ static inline Py_ssize_t _Py_SIZE(const PyVarObject *ob) {
 #define Py_SIZE(ob) _Py_SIZE(_PyVarObject_CAST_CONST(ob))
 
 
-static inline PyTypeObject* _Py_TYPE(const PyObject *ob) {
-    return ob->ob_type;
-}
+extern PyTypeObject* _Py_TYPE(const PyObject *ob);
+
 #define Py_TYPE(ob) _Py_TYPE(_PyObject_CAST_CONST(ob))
 
 
