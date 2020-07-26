@@ -419,13 +419,7 @@ PyAPI_FUNC(void) _Py_NegativeRefcount(const char *filename, int lineno,
 
 PyAPI_FUNC(void) _Py_Dealloc(PyObject *);
 
-static inline void _Py_INCREF(PyObject *op)
-{
-#ifdef Py_REF_DEBUG
-    _Py_RefTotal++;
-#endif
-    op->ob_refcnt++;
-}
+extern void _Py_INCREF(PyObject*);
 
 #define Py_INCREF(op) _Py_INCREF(_PyObject_CAST(op))
 
