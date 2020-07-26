@@ -20,4 +20,9 @@ def type_of(self: *PyObject): *PyTypeObject.t {
     return *self.ob_type;
 }
 
+@extern(_Py_Dealloc)
+def dealloc(self: *mut PyObject): Void {
+    PyTypeObject.destructor(type_of(self))(self);
+}
+
 

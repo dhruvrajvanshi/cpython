@@ -2200,17 +2200,7 @@ _PyObject_AssertFailed(PyObject *obj, const char *expr, const char *msg,
     Py_FatalError("_PyObject_AssertFailed");
 }
 
-
-void
-_Py_Dealloc(PyObject *op)
-{
-    destructor dealloc = Py_TYPE(op)->tp_dealloc;
-#ifdef Py_TRACE_REFS
-    _Py_ForgetReference(op);
-#endif
-    (*dealloc)(op);
-}
-
+extern void _Py_Dealloc(PyObject *op);
 
 PyObject **
 PyObject_GET_WEAKREFS_LISTPTR(PyObject *op)

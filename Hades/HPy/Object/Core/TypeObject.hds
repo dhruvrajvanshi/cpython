@@ -1,16 +1,17 @@
 import HPy.Core.SSize as SSize;
+import HPy.Object as PyObject;
 import HPy.Object.Core.VarObject as PyVarObject;
 
 type PyTypeObject = t;
 struct t {
-    val base: PyVarObject.t;
-    val name:  *Byte;
-    val basicsize: SSize.t;
-    val itemsize: SSize.t; // For allocation
+    val m_base: PyVarObject.t;
+    val m_name:  *Byte;
+    val m_basicsize: SSize.t;
+    val m_itemsize: SSize.t; // For allocation
+    val m_destructor: PyObject.Destructor;
 
     // /* Methods to implement standard operations */
 
-    // destructor tp_dealloc;
     // Py_ssize_t tp_vectorcall_offset;
     // getattrfunc tp_getattr;
     // setattrfunc tp_setattr;
@@ -84,4 +85,8 @@ struct t {
 
     // destructor tp_finalize;
     // vectorcallfunc tp_vectorcall;
+}
+
+def destructor(self: *t): PyObject.Destructor {
+    return *(self.m_destructor);
 }
