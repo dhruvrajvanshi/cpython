@@ -34,6 +34,7 @@ abs_builddir=	@abs_builddir@
 
 
 CC=		@CC@
+HDC=    @HDC@
 CXX=		@CXX@
 MAINCC=		@MAINCC@
 LINKCC=		@LINKCC@
@@ -320,10 +321,14 @@ PARSER_HEADERS= \
 		$(PEGEN_HEADERS) \
 		$(srcdir)/Parser/tokenizer.h
 
+HADES_SOURCES= \
+	$(find Hades -name '*.hds')
+
 ##########################################################################
 # Python
 
 PYTHON_OBJS=	\
+		Hades/libhadespython.o \
 		Python/_warnings.o \
 		Python/Python-ast.o \
 		Python/asdl.o \
@@ -634,6 +639,8 @@ libpython$(LDVERSION).so: $(LIBRARY_OBJS) $(DTRACE_OBJS)
 	else \
 		$(BLDSHARED) -o $@ $(LIBRARY_OBJS) $(MODLIBS) $(SHLIBS) $(LIBC) $(LIBM); \
 	fi
+
+Hades/libhadespython.o: $(HDC) $(HADES_SOURCES); $(HDC) --main Hades/libhadespython.hds --output Hades/libhadespython --directories Hades --lib
 
 libpython3.so:	libpython$(LDVERSION).so
 	$(BLDSHARED) $(NO_AS_NEEDED) -o $@ -Wl,-h$@ $^
