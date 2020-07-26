@@ -943,9 +943,6 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, PyFrameObject *f, int throwflag)
 {
     _Py_EnsureTstateNotNULL(tstate);
 
-#ifdef DXPAIRS
-    int lastopcode = 0;
-#endif
     PyObject **stack_pointer;  /* Next free slot in value stack */
     const _Py_CODEUNIT *next_instr;
     int opcode;        /* Current opcode */
@@ -970,118 +967,14 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, PyFrameObject *f, int throwflag)
     PyObject *consts;
     _PyOpcache *co_opcache;
 
-#ifdef LLTRACE
-    _Py_IDENTIFIER(__ltrace__);
-#endif
-
-/* Computed GOTOs, or
-       the-optimization-commonly-but-improperly-known-as-"threaded code"
-   using gcc's labels-as-values extension
-   (http://gcc.gnu.org/onlinedocs/gcc/Labels-as-Values.html).
-
-   The traditional bytecode evaluation loop uses a "switch" statement, which
-   decent compilers will optimize as a single indirect branch instruction
-   combined with a lookup table of jump addresses. However, since the
-   indirect jump instruction is shared by all opcodes, the CPU will have a
-   hard time making the right prediction for where to jump next (actually,
-   it will be always wrong except in the uncommon case of a sequence of
-   several identical opcodes).
-
-   "Threaded code" in contrast, uses an explicit jump table and an explicit
-   indirect jump instruction at the end of each opcode. Since the jump
-   instruction is at a different address for each opcode, the CPU will make a
-   separate prediction for each of these instructions, which is equivalent to
-   predicting the second opcode of each opcode pair. These predictions have
-   a much better chance to turn out valid, especially in small bytecode loops.
-
-   A mispredicted branch on a modern CPU flushes the whole pipeline and
-   can cost several CPU cycles (depending on the pipeline depth),
-   and potentially many more instructions (depending on the pipeline width).
-   A correctly predicted branch, however, is nearly free.
-
-   At the time of this writing, the "threaded code" version is up to 15-20%
-   faster than the normal "switch" version, depending on the compiler and the
-   CPU architecture.
-
-   We disable the optimization if DYNAMIC_EXECUTION_PROFILE is defined,
-   because it would render the measurements invalid.
-
-
-   NOTE: care must be taken that the compiler doesn't try to "optimize" the
-   indirect jumps by sharing them between all opcodes. Such optimizations
-   can be disabled on gcc by using the -fno-gcse flag (or possibly
-   -fno-crossjumping).
-*/
-
-#ifdef DYNAMIC_EXECUTION_PROFILE
-#undef USE_COMPUTED_GOTOS
-#define USE_COMPUTED_GOTOS 0
-#endif
-
-#ifdef HAVE_COMPUTED_GOTOS
-    #ifndef USE_COMPUTED_GOTOS
-    #define USE_COMPUTED_GOTOS 1
-    #endif
-#else
-    #if defined(USE_COMPUTED_GOTOS) && USE_COMPUTED_GOTOS
-    #error "Computed gotos are not supported on this compiler."
-    #endif
-    #undef USE_COMPUTED_GOTOS
-    #define USE_COMPUTED_GOTOS 0
-#endif
-
-#if USE_COMPUTED_GOTOS
-/* Import the static jump table */
-#include "opcode_targets.h"
-
-#define TARGET(op) \
-    op: \
-    TARGET_##op
-
-#ifdef LLTRACE
-#define FAST_DISPATCH() \
-    { \
-        if (!lltrace && !_Py_TracingPossible(ceval2) && !PyDTrace_LINE_ENABLED()) { \
-            f->f_lasti = INSTR_OFFSET(); \
-            NEXTOPARG(); \
-            goto *opcode_targets[opcode]; \
-        } \
-        goto fast_next_opcode; \
-    }
-#else
-#define FAST_DISPATCH() \
-    { \
-        if (!_Py_TracingPossible(ceval2) && !PyDTrace_LINE_ENABLED()) { \
-            f->f_lasti = INSTR_OFFSET(); \
-            NEXTOPARG(); \
-            goto *opcode_targets[opcode]; \
-        } \
-        goto fast_next_opcode; \
-    }
-#endif
-
-#define DISPATCH() \
-    { \
-        if (!_Py_atomic_load_relaxed(eval_breaker)) { \
-            FAST_DISPATCH(); \
-        } \
-        continue; \
-    }
-
-#else
 #define TARGET(op) op
-#define FAST_DISPATCH() goto fast_next_opcode
+#define FAST_DISPATCH() continue
 #define DISPATCH() continue
-#endif
 
 
 /* Tuple access macros */
 
-#ifndef Py_DEBUG
 #define GETITEM(v, i) PyTuple_GET_ITEM((PyTupleObject *)(v), (i))
-#else
-#define GETITEM(v, i) PyTuple_GetItem((v), (i))
-#endif
 
 /* Code access macros */
 
@@ -1097,37 +990,9 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, PyFrameObject *f, int throwflag)
 #define JUMPTO(x)       (next_instr = first_instr + (x) / sizeof(_Py_CODEUNIT))
 #define JUMPBY(x)       (next_instr += (x) / sizeof(_Py_CODEUNIT))
 
-/* OpCode prediction macros
-    Some opcodes tend to come in pairs thus making it possible to
-    predict the second code when the first is run.  For example,
-    COMPARE_OP is often followed by POP_JUMP_IF_FALSE or POP_JUMP_IF_TRUE.
-
-    Verifying the prediction costs a single high-speed test of a register
-    variable against a constant.  If the pairing was good, then the
-    processor's own internal branch predication has a high likelihood of
-    success, resulting in a nearly zero-overhead transition to the
-    next opcode.  A successful prediction saves a trip through the eval-loop
-    including its unpredictable switch-case branch.  Combined with the
-    processor's internal branch prediction, a successful PREDICT has the
-    effect of making the two opcodes run as if they were a single new opcode
-    with the bodies combined.
-
-    If collecting opcode statistics, your choices are to either keep the
-    predictions turned-on and interpret the results as if some opcodes
-    had been combined or turn-off predictions so that the opcode frequency
-    counter updates for both opcodes.
-
-    Opcode prediction is disabled with threaded code, since the latter allows
-    the CPU to record separate branch prediction information for each
-    opcode.
-
-*/
 
 #define PREDICT_ID(op)          PRED_##op
 
-#if defined(DYNAMIC_EXECUTION_PROFILE) || USE_COMPUTED_GOTOS
-#define PREDICT(op)             if (0) goto PREDICT_ID(op)
-#else
 #define PREDICT(op) \
     do { \
         _Py_CODEUNIT word = *next_instr; \
@@ -1138,7 +1003,6 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, PyFrameObject *f, int throwflag)
             goto PREDICT_ID(op); \
         } \
     } while(0)
-#endif
 #define PREDICTED(op)           PREDICT_ID(op):
 
 
@@ -1161,34 +1025,11 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, PyFrameObject *f, int throwflag)
 #define BASIC_PUSH(v)     (*stack_pointer++ = (v))
 #define BASIC_POP()       (*--stack_pointer)
 
-#ifdef LLTRACE
-#define PUSH(v)         { (void)(BASIC_PUSH(v), \
-                          lltrace && prtrace(tstate, TOP(), "push")); \
-                          assert(STACK_LEVEL() <= co->co_stacksize); }
-#define POP()           ((void)(lltrace && prtrace(tstate, TOP(), "pop")), \
-                         BASIC_POP())
-#define STACK_GROW(n)   do { \
-                          assert(n >= 0); \
-                          (void)(BASIC_STACKADJ(n), \
-                          lltrace && prtrace(tstate, TOP(), "stackadj")); \
-                          assert(STACK_LEVEL() <= co->co_stacksize); \
-                        } while (0)
-#define STACK_SHRINK(n) do { \
-                            assert(n >= 0); \
-                            (void)(lltrace && prtrace(tstate, TOP(), "stackadj")); \
-                            (void)(BASIC_STACKADJ(-n)); \
-                            assert(STACK_LEVEL() <= co->co_stacksize); \
-                        } while (0)
-#define EXT_POP(STACK_POINTER) ((void)(lltrace && \
-                                prtrace(tstate, (STACK_POINTER)[-1], "ext_pop")), \
-                                *--(STACK_POINTER))
-#else
 #define PUSH(v)                BASIC_PUSH(v)
 #define POP()                  BASIC_POP()
 #define STACK_GROW(n)          BASIC_STACKADJ(n)
 #define STACK_SHRINK(n)        BASIC_STACKADJ(-n)
 #define EXT_POP(STACK_POINTER) (*--(STACK_POINTER))
-#endif
 
 /* Local variable macros */
 
@@ -1246,31 +1087,9 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, PyFrameObject *f, int throwflag)
             } \
         } \
     } while (0)
-
-#if OPCACHE_STATS
-
-#define OPCACHE_STAT_GLOBAL_HIT() \
-    do { \
-        if (co->co_opcache != NULL) opcache_global_hits++; \
-    } while (0)
-
-#define OPCACHE_STAT_GLOBAL_MISS() \
-    do { \
-        if (co->co_opcache != NULL) opcache_global_misses++; \
-    } while (0)
-
-#define OPCACHE_STAT_GLOBAL_OPT() \
-    do { \
-        if (co->co_opcache != NULL) opcache_global_opts++; \
-    } while (0)
-
-#else /* OPCACHE_STATS */
-
 #define OPCACHE_STAT_GLOBAL_HIT()
 #define OPCACHE_STAT_GLOBAL_MISS()
 #define OPCACHE_STAT_GLOBAL_OPT()
-
-#endif
 
 /* Start of code */
 
@@ -1365,28 +1184,11 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, PyFrameObject *f, int throwflag)
             if (_PyCode_InitOpcache(co) < 0) {
                 goto exit_eval_frame;
             }
-#if OPCACHE_STATS
-            opcache_code_objects_extra_mem +=
-                PyBytes_Size(co->co_code) / sizeof(_Py_CODEUNIT) +
-                sizeof(_PyOpcache) * co->co_opcache_size;
-            opcache_code_objects++;
-#endif
         }
     }
 
-#ifdef LLTRACE
-    lltrace = _PyDict_GetItemId(f->f_globals, &PyId___ltrace__) != NULL;
-#endif
-
     if (throwflag) /* support for generator.throw() */
         goto error;
-
-#ifdef Py_DEBUG
-    /* _PyEval_EvalFrameDefault() must not be called with an exception set,
-       because it can clear it (directly or indirectly) and so the
-       caller loses its exception */
-    assert(!_PyErr_Occurred(tstate));
-#endif
 
 main_loop:
     for (;;) {
@@ -1464,29 +1266,6 @@ main_loop:
 
         NEXTOPARG();
     dispatch_opcode:
-#ifdef DYNAMIC_EXECUTION_PROFILE
-#ifdef DXPAIRS
-        dxpairs[lastopcode][opcode]++;
-        lastopcode = opcode;
-#endif
-        dxp[opcode]++;
-#endif
-
-#ifdef LLTRACE
-        /* Instruction tracing */
-
-        if (lltrace) {
-            if (HAS_ARG(opcode)) {
-                printf("%d: %d, %d\n",
-                       f->f_lasti, opcode, oparg);
-            }
-            else {
-                printf("%d: %d\n",
-                       f->f_lasti, opcode);
-            }
-        }
-#endif
-
         switch (opcode) {
 
         /* BEWARE!
@@ -3272,18 +3051,7 @@ main_loop:
         case TARGET(JUMP_ABSOLUTE): {
             PREDICTED(JUMP_ABSOLUTE);
             JUMPTO(oparg);
-#if FAST_LOOPS
-            /* Enabling this path speeds-up all while and for-loops by bypassing
-               the per-loop checks for signals.  By default, this should be turned-off
-               because it prevents detection of a control-break in tight loops like
-               "while 1: pass".  Compile with this option turned-on when you need
-               the speed-up and do not need break checking inside tight loops (ones
-               that contain only instructions ending with FAST_DISPATCH).
-            */
-            FAST_DISPATCH();
-#else
             DISPATCH();
-#endif
         }
 
         case TARGET(GET_ITER): {
@@ -3736,10 +3504,6 @@ main_loop:
             goto dispatch_opcode;
         }
 
-
-#if USE_COMPUTED_GOTOS
-        _unknown_opcode:
-#endif
         default:
             fprintf(stderr,
                 "XXX lineno: %d, opcode: %d\n",
@@ -3755,16 +3519,7 @@ main_loop:
         Py_UNREACHABLE();
 
 error:
-        /* Double-check exception status. */
-#ifdef NDEBUG
-        if (!_PyErr_Occurred(tstate)) {
-            _PyErr_SetString(tstate, PyExc_SystemError,
-                             "error return without exception set");
-        }
-#else
         assert(_PyErr_Occurred(tstate));
-#endif
-
         /* Log traceback info. */
         PyTraceBack_Here(f);
 
