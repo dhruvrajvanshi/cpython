@@ -1,0 +1,9 @@
+import HPy.Object as PyObject;
+import HPy.Stubs as Stubs;
+
+type StackPointer = **mut PyObject.t;
+
+@extern(HPy_Interpreter_TOP)
+def top(stack: StackPointer): *mut PyObject.t {
+    return *Stubs.pointer_offset(stack, -1);
+}

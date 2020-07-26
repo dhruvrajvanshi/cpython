@@ -1,0 +1,6 @@
+
+extern def pointer_add(*Void, Size): *Void = _HPy_Stubs_pointer_add;
+
+def pointer_offset[T](ptr: *T, offset: Size): *T {
+    return pointer_cast[T](pointer_add(pointer_cast[Void](ptr), offset * size_of[T]));
+}

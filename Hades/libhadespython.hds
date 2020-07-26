@@ -1,1 +1,3 @@
 import HPy.Object as PyObject;
+import HPy.Interpreter.CEval as CEval;
+import HPy.Interpreter.StackPointer as StackPointer;

@@ -44,6 +44,8 @@
 
 _Py_IDENTIFIER(__name__);
 
+extern PyObject* HPy_Interpreter_TOP(PyObject**);
+
 /* Forward declarations */
 Py_LOCAL_INLINE(PyObject *) call_function(
     PyThreadState *tstate, PyObject ***pp_stack,
@@ -1148,7 +1150,7 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, PyFrameObject *f, int throwflag)
    co_stacksize are ints. */
 #define STACK_LEVEL()     ((int)(stack_pointer - f->f_valuestack))
 #define EMPTY()           (STACK_LEVEL() == 0)
-#define TOP()             (stack_pointer[-1])
+#define TOP()             (HPy_Interpreter_TOP(stack_pointer))
 #define SECOND()          (stack_pointer[-2])
 #define THIRD()           (stack_pointer[-3])
 #define FOURTH()          (stack_pointer[-4])
